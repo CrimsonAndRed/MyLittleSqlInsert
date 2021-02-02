@@ -62,7 +62,11 @@ fn parse_insert<'a>(insert_string: &'a str) -> Result<ParsedStatement<'a>, Strin
 
     let mut splitted_iter = Box::leak(first_values_iter).chain(splitted_iter);
 
-    let values = parse_column_names(&mut splitted_iter)?;
+    let values = parse_values(&mut splitted_iter)?;
+
+    if column_names.len() != values.len() {
+        return Err(format!("Expected {} values, got {}", column_names.len(), values.len()));
+    }
 
     Ok(ParsedStatement{
         table_name: String::from(table_name),
@@ -101,7 +105,13 @@ fn parse_column_names<'a>(iterator: &mut dyn Iterator<Item=&'a str>) -> Result<V
 
         let is_first_comma = statement.starts_with(",");
         match (expected_comma, is_first_comma) {
-            (true, true) => statement = &statement[1..],
+            (true, true) => {
+                statement = &statement[1..];
+                if statement.len() == 0 {
+                    expected_comma = false;
+                    continue;
+                }
+            },
             (false, false) => {},
             (true, false) => return Err(format!("Expected statement, started with \",\", instead found \"{}\"", statement)),
             (false, true) => return Err(format!("Expected statement, not started with \",\", instead found \"{}\"", statement)),
@@ -143,6 +153,67 @@ fn extract_open_bracket<'a>(statement: &Option<&'a str>) -> Result<Box<dyn Itera
         },
         None => return Err(format!("Expected statement, started with \"(\", instead statement ended")),
     }
+}
+
+
+fn parse_values<'a>(iterator: &mut dyn Iterator<Item=&'a str>) -> Result<Vec<&'a str>, String> {
+    let mut expected_comma = false;
+    let mut values = Vec::<&'a str>::new();
+
+    let mut escaped_sequence = false;
+    let mut varchar_sequence = false;
+
+    while let Some(mut statement) = iterator.next() {
+
+        let is_first_comma = statement.starts_with(",");
+        match (expected_comma, is_first_comma) {
+            (true, true) => {
+                statement = &statement[1..];
+                if statement.len() == 0 {
+                    expected_comma = false;
+                    continue;
+                }
+            },
+            (false, false) => {},
+            (true, false) => return Err(format!("Expected statement, started with \",\", instead found \"{}\"", statement)),
+            (false, true) => return Err(format!("Expected statement, not started with \",\", instead found \"{}\"", statement)),
+        }
+
+        let chars: Vec<char> = statement.chars().collect();
+        let mut current_sequence_index = 0usize;
+
+        for mut i in 0..chars.len() {
+            if varchar_sequence && chars[i] == '\\' && i != chars.len()-1 && chars[i+1] == '\'' {
+                escaped_sequence = !escaped_sequence;
+                i += 1;
+                continue;
+            }
+
+            if chars[i] == '\'' {
+                varchar_sequence = !varchar_sequence;
+                continue;
+            }
+
+            if chars[i] == ',' && !varchar_sequence {
+                values.push(&statement[current_sequence_index..i]);
+                current_sequence_index = i+1;
+            }
+
+            if chars[i] == ')' && !escaped_sequence && !varchar_sequence {
+                values.push(&statement[current_sequence_index..i]);
+                return Ok(values);
+            }
+        }
+
+        if current_sequence_index != chars.len() && !varchar_sequence {
+            values.push(&statement[current_sequence_index..statement.len()]);
+        }
+
+        if !varchar_sequence {
+            expected_comma = !statement.ends_with(",");
+        }
+    }
+    Err(String::from("Expected statements to end with ), insted they ended without it"))
 }
 
 #[cfg(test)]
