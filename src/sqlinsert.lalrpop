@@ -1,0 +1,80 @@
+use std::str::FromStr;
+use lalrpop_util::ParseError;
+use crate::lalrpop::{SqlInsert};
+
+grammar;
+
+
+pub SqlInsert: SqlInsert<'input> = {
+    ConstInsert ConstInto <table:AnyWord> <alias:AnyWord?> "(" <columns:Words> ")" ConstValues "(" <values:SqlExprs> ")" ";"? => SqlInsert::new(table, alias, columns, values)
+};
+
+AnyWord: &'input str = <s: r"\w*"> => s;
+
+ConstInsert: () = AnyWord =>? {
+    if <>.eq_ignore_ascii_case("insert") {
+        Ok(())
+    } else {
+        Err(ParseError::User {
+            error: "Failed to parse constant \"insert\""
+        })
+    }
+};
+
+ConstInto: () = AnyWord =>? {
+    if <>.eq_ignore_ascii_case("into") {
+        Ok(())
+    } else {
+        Err(ParseError::User {
+            error: "Failed to parse constant \"into\""
+        })
+    }
+};
+
+Words = Comma<AnyWord>;
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+ConstValues: () = AnyWord =>? {
+    if <>.eq_ignore_ascii_case("values") {
+        Ok(())
+    } else {
+        Err(ParseError::User {
+            error: "Failed to parse constant \"values\""
+        })
+    }
+};
+
+SqlExprs = Comma<SqlExpr>;
+
+SqlExpr: String = {
+    <f:AnyWord> <a:SqlFunctionArgument?> => {
+       if let Some(args) = a {
+           format!("{}{}", f, args)
+       } else {
+           f.to_string()
+       }
+    },
+    "'" SqlExpr "'" => {
+        let (_, a, _) = (<>);
+        format!("'{}'", a)
+    }
+};
+
+SqlFunctionArgument: String = {
+   "(" Comma<SqlExpr> ")" => {
+       let (_, a, _) = (<>);
+       format!("({})", a.join(", "))
+   }
+}
+
+// Any: &'input str =  <s: r".*"> => s;
