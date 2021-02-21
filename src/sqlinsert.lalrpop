@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use lalrpop_util::ParseError;
 use crate::lalrpop::{SqlInsert};
 
@@ -9,7 +8,7 @@ pub SqlInsert: SqlInsert<'input> = {
     ConstInsert ConstInto <table:AnyWord> <alias:AnyWord?> "(" <columns:Words> ")" ConstValues "(" <values:SqlExprs> ")" ";"? => SqlInsert::new(table, alias, columns, values)
 };
 
-AnyWord: &'input str = <s: r"\w*"> => s;
+AnyWord: &'input str = <s: r"\w+"> => s;
 
 ConstInsert: () = AnyWord =>? {
     if <>.eq_ignore_ascii_case("insert") {

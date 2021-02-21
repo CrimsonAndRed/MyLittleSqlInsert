@@ -1,8 +1,19 @@
 lalrpop_mod!(pub sqlinsert); // synthesized by LALRPOP
 
-pub fn parse<'a>(insert: &'a str) -> Result<SqlInsert<'a>, String>  {
-    sqlinsert::SqlInsertParser::new().parse(insert)
-        .map_err(|e| format!("{}", e))
+pub fn parse(insert: &str) -> Result<SqlInsert, String>  {
+    let parsed = sqlinsert::SqlInsertParser::new().parse(insert)
+        .map_err(|e| format!("{}", e))?;
+
+    return validate_sql_insert(parsed);
+}
+
+pub fn validate_sql_insert(insert: SqlInsert) -> Result<SqlInsert, String> {
+
+    if insert.columns.len() != insert.values.len() {
+        return Err(format!("Mismatched columns to values: parsed {} columns and {} values", insert.columns.len(), insert.values.len()));
+    }
+
+    Ok(insert)
 }
 
 pub struct SqlInsert<'a> {
