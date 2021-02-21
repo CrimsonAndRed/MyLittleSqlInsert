@@ -64,9 +64,8 @@ SqlExpr: String = {
            f.to_string()
        }
     },
-    "'" SqlExpr "'" => {
-        let (_, a, _) = (<>);
-        format!("'{}'", a)
+    StringLiteral => {
+        <>.to_owned()
     }
 };
 
@@ -77,4 +76,4 @@ SqlFunctionArgument: String = {
    }
 }
 
-// Any: &'input str =  <s: r".*"> => s;
+StringLiteral: &'input str =  <s: r"'\s*([^\\']|\\.)*\s*'"> => s;
